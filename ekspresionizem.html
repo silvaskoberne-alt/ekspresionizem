@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ekspresionizem – interaktivne vaje</title>
+  <style>
+    :root{--bg1:#5d6bff;--bg2:#7c5cff;--text:#111827;--muted:#6b7280;--accent:#6d5efc;--good:#16a34a;--bad:#ef4444;--shadow:0 18px 35px rgba(0,0,0,.10)}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));color:var(--text);padding:22px 12px}
+    .wrap{max-width:1100px;margin:0 auto}
+    header{color:#fff;text-align:center;margin:8px 0 16px}
+    h1{margin:0;font-size:clamp(26px,4vw,44px)}
+    header p{margin:10px 0 0;opacity:.9}
+    .panel{background:rgba(255,255,255,.92);border-radius:22px;box-shadow:var(--shadow);padding:16px}
+    .card{background:#fff;border-radius:20px;border:1px solid rgba(17,24,39,.08);padding:14px;margin:12px 0}
+    .title{display:flex;gap:10px;align-items:center;margin:0 0 8px}
+    .badge{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;background:rgba(109,94,252,.12);color:var(--accent);font-size:20px}
+    h2{margin:0;font-size:20px;color:#3b2fb8}
+    .desc{margin:6px 0 12px;color:var(--muted)}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    button{border:0;border-radius:14px;padding:10px 14px;font-weight:700;cursor:pointer;background:var(--accent);color:#fff}
+    button.secondary{background:rgba(17,24,39,.06);color:var(--text)}
+    .pill{border:2px solid rgba(17,24,39,.10);background:#fff;border-radius:999px;padding:8px 12px;cursor:pointer;user-select:none}
+    .pill.sel{border-color:rgba(109,94,252,.55);background:rgba(109,94,252,.06)}
+    .pill.ok{border-color:rgba(22,163,74,.55);background:rgba(22,163,74,.10)}
+    .pill.no{border-color:rgba(239,68,68,.55);background:rgba(239,68,68,.10)}
+    .toast{margin-top:10px;border-radius:14px;padding:10px 12px;display:none}
+    .toast.show{display:block}
+    .toast.good{background:rgba(22,163,74,.12)}
+    .toast.bad{background:rgba(239,68,68,.12)}
+    select,input[type="text"]{padding:10px 12px;border-radius:14px;border:2px solid rgba(17,24,39,.10);outline:none;min-width:220px}
+    .cols{display:grid;grid-template-columns:1fr;gap:10px}
+    @media (min-width:850px){.cols{grid-template-columns:1fr 1fr}}
+    .box{border:2px dashed rgba(17,24,39,.15);border-radius:16px;padding:10px;min-height:120px}
+    .box h3{margin:0 0 8px;font-size:14px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+    .drag{display:inline-block;margin:6px 6px 0 0;padding:8px 10px;border-radius:12px;border:2px solid rgba(17,24,39,.10);background:#fff;cursor:grab;user-select:none}
+    .small{font-size:13px;color:var(--muted);margin-top:6px}
+    .gridnote{display:grid;grid-template-columns:repeat(12,1fr);gap:6px;margin-top:10px}
+    .cell{aspect-ratio:1/1;border-radius:10px;border:2px solid rgba(17,24,39,.10);background:#fff;cursor:pointer}
+    .cell.on{border-color:rgba(109,94,252,.55);background:rgba(109,94,252,.10)}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🎭 Ekspresionizem v glasbi</h1>
+    <p>6 interaktivnih vaj (Schoenberg, Berg; atonalnost, grafična notacija)</p>
+  </header>
+
+  <div class="panel" id="app"></div>
+</div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s);
+const el=(t,p={},kids=[])=>{const n=document.createElement(t);Object.entries(p).forEach(([k,v])=>{if(k==="class")n.className=v;else if(k==="html")n.innerHTML=v;else if(k.startsWith("on"))n.addEventListener(k.slice(2).toLowerCase(),v);else n.setAttribute(k,v)});kids.forEach(k=>n.appendChild(k));return n;}
+const toast=(n,msg,kind)=>{n.textContent=msg;n.className="toast show "+(kind||"");}
+const clearToast=(n)=>{n.className="toast";n.textContent="";}
+
+function card({badge,title,desc}, kids){
+  const c=el("section",{class:"card"});
+  c.appendChild(el("div",{class:"title"},[
+    el("div",{class:"badge","aria-hidden":"true"},[document.createTextNode(badge)]),
+    el("h2",{},[document.createTextNode(title)])
+  ]));
+  c.appendChild(el("div",{class:"desc"},[document.createTextNode(desc)]));
+  kids.forEach(k=>c.appendChild(k));
+  return c;
+}
+
+function matchSelect(rows){
+  const t=el("div",{class:"toast"});
+  const state=rows.map(r=>{
+    const s=el("select",{});
+    ["— izberi —", ...r.options].forEach(o=>s.appendChild(el("option",{value:o},[document.createTextNode(o)])));
+    return {r,s};
+  });
+  const check=()=>{
+    let ok=0;
+    state.forEach(({r,s})=>{
+      const good=s.value===r.answer;
+      s.style.borderColor=good?"rgba(22,163,74,.55)":"rgba(239,68,68,.55)";
+      if(good) ok++;
+    });
+    toast(t, ok===state.length?"✅ Vse pravilno!":`ℹ️ Pravilno: ${ok}/${state.length}.`, ok===state.length?"good":"bad");
+  };
+  const reset=()=>{state.forEach(({s})=>{s.value="— izberi —";s.style.borderColor="rgba(17,24,39,.10)";});clearToast(t);};
+  return {node:el("div",{},[
+    ...state.map(({r,s})=>el("div",{class:"row",style:"margin:8px 0"},[
+      el("div",{style:"min-width:280px;font-weight:800"},[document.createTextNode(r.left)]), s
+    ])),
+    el("div",{class:"row",style:"margin-top:12px"},[
+      el("button",{class:"secondary",onClick:reset},[document.createTextNode("Ponastavi")]),
+      el("button",{onClick:check},[document.createTextNode("Preveri")]),
+    ]),
+    t
+  ])};
+}
+
+function singleChoice({question,options,answer}){
+  const t=el("div",{class:"toast"});
+  let chosen=null;
+  const pills=options.map(op=>{
+    const p=el("div",{class:"pill",role:"button",tabindex:"0"},[document.createTextNode(op)]);
+    const pick=()=>{ if(p.dataset.locked==="1")return; chosen=op; pills.forEach(x=>x.classList.remove("sel")); p.classList.add("sel"); clearToast(t); };
+    p.addEventListener("click",pick);
+    p.addEventListener("keydown",(e)=>{if(e.key==="Enter"||e.key===" ")pick();});
+    return p;
+  });
+  const check=()=>{
+    if(!chosen){toast(t,"ℹ️ Najprej izberi odgovor.","bad");return;}
+    pills.forEach(p=>{
+      p.dataset.locked="1";
+      const v=p.textContent;
+      p.classList.remove("ok","no");
+      if(v===answer) p.classList.add("ok");
+      if(v===chosen && v!==answer) p.classList.add("no");
+    });
+    toast(t, chosen===answer?"✅ Prav!":"❌ Ni prav. Poglej označen pravilen odgovor.", chosen===answer?"good":"bad");
+  };
+  const reset=()=>{chosen=null;pills.forEach(p=>{p.className="pill";p.dataset.locked="0";});clearToast(t);};
+  return {node:el("div",{},[
+    el("div",{style:"font-weight:800;margin:4px 0 10px"},[document.createTextNode(question)]),
+    el("div",{class:"row"},pills),
+    el("div",{class:"row",style:"margin-top:12px"},[
+      el("button",{class:"secondary",onClick:reset},[document.createTextNode("Ponastavi")]),
+      el("button",{onClick:check},[document.createTextNode("Preveri")]),
+    ]),
+    t
+  ])};
+}
+
+function dragCats({bins,items}){
+  const t=el("div",{class:"toast"});
+  const bank=el("div",{class:"box"});
+  bank.appendChild(el("h3",{},[document.createTextNode("Kartice")]));
+  const bankItems=el("div",{});
+  bank.appendChild(bankItems);
+
+  const binNodes=bins.map(b=>{
+    const box=el("div",{class:"box","data-bin":b.id});
+    box.appendChild(el("h3",{},[document.createTextNode(b.label)]));
+    box.addEventListener("dragover",(e)=>e.preventDefault());
+    box.addEventListener("drop",(e)=>{
+      e.preventDefault();
+      const id=e.dataTransfer.getData("text/plain");
+      const node=document.getElementById(id);
+      if(node) box.appendChild(node);
+      clearToast(t);
+    });
+    return box;
+  });
+
+  items.forEach(it=>{
+    const chip=el("div",{class:"drag",draggable:"true",id:"drag_"+it.id,"data-answer":it.bin},[document.createTextNode(it.label)]);
+    chip.addEventListener("dragstart",(e)=>e.dataTransfer.setData("text/plain",chip.id));
+    bankItems.appendChild(chip);
+  });
+
+  const check=()=>{
+    let ok=0;
+    items.forEach(it=>{
+      const node=$("#drag_"+it.id);
+      const parentBin=node.closest(".box")?.dataset?.bin || "bank";
+      const good=parentBin===it.bin;
+      node.style.borderColor=good?"rgba(22,163,74,.55)":"rgba(239,68,68,.55)";
+      if(good) ok++;
+    });
+    toast(t, ok===items.length?"✅ Vse pravilno!":`ℹ️ Pravilno: ${ok}/${items.length}.`, ok===items.length?"good":"bad");
+  };
+  const reset=()=>{
+    items.forEach(it=>{
+      const node=$("#drag_"+it.id);
+      node.style.borderColor="rgba(17,24,39,.10)";
+      bankItems.appendChild(node);
+    });
+    clearToast(t);
+  };
+
+  const cols=el("div",{class:"cols"},[bank,...binNodes]);
+
+  return {node:el("div",{},[
+    cols,
+    el("div",{class:"row",style:"margin-top:12px"},[
+      el("button",{class:"secondary",onClick:reset},[document.createTextNode("Ponastavi")]),
+      el("button",{onClick:check},[document.createTextNode("Preveri")]),
+    ]),
+    t
+  ])};
+}
+
+function textInput({prompt,answer,hint}){
+  const t=el("div",{class:"toast"});
+  const inp=el("input",{type:"text",placeholder:"Vpiši odgovor…"});
+  const check=()=>{
+    const v=(inp.value||"").trim().toLowerCase();
+    const a=answer.trim().toLowerCase();
+    const ok=v===a;
+    inp.style.borderColor=ok?"rgba(22,163,74,.55)":"rgba(239,68,68,.55)";
+    toast(t, ok?"✅ Prav!":`❌ Ni prav. Namig: ${hint||"—"}`, ok?"good":"bad");
+  };
+  const reset=()=>{inp.value="";inp.style.borderColor="rgba(17,24,39,.10)";clearToast(t);};
+  return {node:el("div",{},[
+    el("div",{style:"font-weight:800;margin:4px 0 10px"},[document.createTextNode(prompt)]),
+    inp,
+    el("div",{class:"row",style:"margin-top:12px"},[
+      el("button",{class:"secondary",onClick:reset},[document.createTextNode("Ponastavi")]),
+      el("button",{onClick:check},[document.createTextNode("Preveri")]),
+    ]),
+    t
+  ])};
+}
+
+/* ---- grafična notacija: klikni mrežo ---- */
+function graphicNotation(){
+  const t=el("div",{class:"toast"});
+  const grid=el("div",{class:"gridnote"});
+  const cells=[];
+  for(let i=0;i<48;i++){
+    const c=el("div",{class:"cell",role:"button",tabindex:"0"});
+    const toggle=()=>{c.classList.toggle("on"); clearToast(t);};
+    c.addEventListener("click",toggle);
+    c.addEventListener("keydown",(e)=>{if(e.key==="Enter"||e.key===" ")toggle();});
+    cells.push(c); grid.appendChild(c);
+  }
+  const check=()=>{
+    const on=cells.filter(c=>c.classList.contains("on")).length;
+    // cilj: razumeti idejo (ni “prav/narobe”), a spodbudi vsaj nekaj točk
+    toast(t, on>=8 ? "✅ Super – ustvaril/-a si grafični zapis (vzorec zvokov/tišin)." : "ℹ️ Dodaj še nekaj točk (vsaj 8), da dobiš bolj “zvočno sliko”.", on>=8?"good":"bad");
+  };
+  const reset=()=>{cells.forEach(c=>c.classList.remove("on")); clearToast(t);};
+  return {node:el("div",{},[
+    el("div",{class:"small"},[document.createTextNode("Klikni kvadratke: več točk = več “zvokov”. To je poenostavljen primer grafične notacije.")]),
+    grid,
+    el("div",{class:"row",style:"margin-top:12px"},[
+      el("button",{class:"secondary",onClick:reset},[document.createTextNode("Ponastavi")]),
+      el("button",{onClick:check},[document.createTextNode("Preveri")]),
+    ]),
+    t
+  ])};
+}
+
+/* ---------- sestavi stran ---------- */
+const app=$("#app");
+
+app.appendChild(card({
+  badge:"🔗",
+  title:"Vaja 1: Poveži skladatelja z delom",
+  desc:"Poveži ekspresionistična dela iz učne priprave."
+},[
+  matchSelect([
+    {left:"Arnold Schoenberg", answer:"Pierrot Lunaire", options:["Pierrot Lunaire","Bolero","Morje"]},
+    {left:"Alban Berg", answer:"Vojček", options:["Vojček","Memory","4'33''"]}
+  ]).node
+]));
+
+app.appendChild(card({
+  badge:"❓",
+  title:"Vaja 2: Atonalnost",
+  desc:"Izberi najboljši opis pojma."
+},[
+  singleChoice({
+    question:"Kaj pomeni atonalna glasba?",
+    options:["Glasba brez jasnega središčnega tona/tonalitete","Glasba, ki je vedno tiha","Glasba samo za klavir"],
+    answer:"Glasba brez jasnega središčnega tona/tonalitete"
+  }).node
+]));
+
+app.appendChild(card({
+  badge:"🧩",
+  title:"Vaja 3: Razvrsti pojme",
+  desc:"Povleci kartice: kaj bolj spada k ekspresionizmu/novostim 20. stoletja?"
+},[
+  dragCats({
+    bins:[
+      {id:"novo", label:"Nove usmeritve (20. st.)"},
+      {id:"klas", label:"Bolj tradicionalno (prej)"},
+    ],
+    items:[
+      {id:"aton", label:"atonalna glasba", bin:"novo"},
+      {id:"graf", label:"grafična notacija", bin:"novo"},
+      {id:"simf", label:"simfonija v klasični obliki", bin:"klas"},
+      {id:"durmol", label:"jasna dur/mol tonaliteta", bin:"klas"},
+    ]
+  }).node
+]));
+
+app.appendChild(card({
+  badge:"✅",
+  title:"Vaja 4: Prepoznaj predstavnika ekspresionizma",
+  desc:"Klikni pravilna imena."
+},[
+  (function(){
+    const t=el("div",{class:"toast"});
+    const items=[
+      {id:"sch",label:"Arnold Schoenberg",correct:true},
+      {id:"berg",label:"Alban Berg",correct:true},
+      {id:"ravel",label:"Maurice Ravel",correct:false},
+      {id:"deb",label:"Claude Debussy",correct:false},
+    ];
+    const sel=new Set();
+    const pills=items.map(it=>{
+      const p=el("div",{class:"pill",role:"button",tabindex:"0"},[document.createTextNode(it.label)]);
+      const toggle=()=>{
+        if(p.dataset.locked==="1")return;
+        sel.has(it.id)?sel.delete(it.id):sel.add(it.id);
+        p.classList.toggle("sel",sel.has(it.id)); clearToast(t);
+      };
+      p.addEventListener("click",toggle);
+      p.addEventListener("keydown",(e)=>{if(e.key==="Enter"||e.key===" ")toggle();});
+      p.dataset.id=it.id;
+      return p;
+    });
+    const check=()=>{
+      const correct=new Set(items.filter(x=>x.correct).map(x=>x.id));
+      let wrong=0,miss=0;
+      pills.forEach(p=>{
+        const id=p.dataset.id,isSel=sel.has(id),isOk=correct.has(id);
+        p.classList.remove("ok","no");
+        if(isSel&&isOk)p.classList.add("ok");
+        if(isSel&&!isOk)p.classList.add("no");
+        if(!isSel&&isOk)p.classList.add("ok");
+        p.dataset.locked="1";
+      });
+      [...sel].forEach(id=>{if(!correct.has(id))wrong++;});
+      [...correct].forEach(id=>{if(!sel.has(id))miss++;});
+      toast(t,(wrong===0&&miss===0)?"✅ Odlično!":`❌ Napačno: ${wrong}, manjka: ${miss}.`,(wrong===0&&miss===0)?"good":"bad");
+    };
+    const reset=()=>{sel.clear();pills.forEach(p=>{p.className="pill";p.dataset.locked="0";});clearToast(t);};
+    return el("div",{},[
+      el("div",{class:"row"},pills),
+      el("div",{class:"row",style:"margin-top:12px"},[
+        el("button",{class:"secondary",onClick:reset},[document.createTextNode("Ponastavi")]),
+        el("button",{onClick:check},[document.createTextNode("Preveri")]),
+      ]),
+      t
+    ]);
+  })()
+]));
+
+app.appendChild(card({
+  badge:"🧱",
+  title:"Vaja 5: Grafična notacija (ustvari zvočno sliko)",
+  desc:"Ustvari preprost grafični zapis (točke = zvoki, prazno = tišina)."
+},[
+  graphicNotation().node
+]));
+
+app.appendChild(card({
+  badge:"✍️",
+  title:"Vaja 6: Dopolni pojem",
+  desc:"Vpiši manjkajoč pojem."
+},[
+  textInput({
+    prompt:"Ekspresionizem pogosto uporablja __________ glasbo. (1 beseda)",
+    answer:"atonalno",
+    hint:"Začne se na 'a…'"
+  }).node
+]));
+</script>
+</body>
+</html>
+
